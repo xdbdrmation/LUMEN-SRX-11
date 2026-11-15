@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <vector>
 #include <string>
@@ -158,8 +157,7 @@ int main() {
         std::ifstream file("output.png", std::ios::binary);
 
         if (!file) {
-            res.status = 404;
-            res.set_content("Image not generated yet!", "text/plain");
+            res.status = 204;
             return;
         }
 
@@ -168,6 +166,7 @@ int main() {
             std::istreambuf_iterator<char>()
         );
 
+        res.set_header("Cache-Control", "no-store");
         res.set_content(image, "image/png");
     });
 
@@ -191,12 +190,10 @@ int main() {
 
             cli.set_follow_location(true);
 
-            // SIA request timeouts
             cli.set_connection_timeout(15, 0);
             cli.set_read_timeout(45, 0);
             cli.set_write_timeout(15, 0);
 
-            // Measure SIA request duration
             auto start = std::chrono::steady_clock::now();
 
             std::cout << "Sending SIA request..." << std::endl;
@@ -327,6 +324,9 @@ int main() {
 
                     std::string outputText = "Extracted access_urls:\n\n";
 
+                    
+                    bool pngGenerated = false;
+
                     for (const auto& fitsUrl : accessUrls) {
 
                         const std::string prefix = "https://irsa.ipac.caltech.edu";
@@ -347,7 +347,6 @@ int main() {
                             httplib::SSLClient fitsClient("irsa.ipac.caltech.edu");
                             fitsClient.set_follow_location(true);
 
-                            // FITS download timeouts
                             fitsClient.set_connection_timeout(15, 0);
                             fitsClient.set_read_timeout(120, 0);
                             fitsClient.set_write_timeout(15, 0);
@@ -431,127 +430,109 @@ int main() {
                                             std::cout << "FITS opened successfully"
                                                       << std::endl;
 
-                                            std::cout << "Number of extensions: "
-                                                      << fits.extension().size()
-                                                      << std::endl;
+                                            auto processHDU = [](CCfits::FITS& fitsFile, bool& successFlag) {
+                                                try {
+                                                    CCfits::PHDU& phdu = fitsFile.pHDU();
+                                                    long dimensions = phdu.axes();
+                                                    if (dimensions >= 2) {
+                                                        long width = phdu.axis(0);
+                                                        long height = phdu.axis(1);
+                                                        if (width > 0 && height > 0) {
+                                                            std::valarray<double> pixels;
+                                                            phdu.read(pixels);
 
-                                            bool imageFound = false;
+                                                            if (pixels.size() >= static_cast<size_t>(width * height)) {
+                                                                double minValue = std::numeric_limits<double>::max();
+                                                                double maxValue = std::numeric_limits<double>::lowest();
 
-                                            for (int i = 1;
-                                                 i <= static_cast<int>(fits.extension().size());
-                                                 i++) {
+                                                                for (size_t j = 0; j < static_cast<size_t>(width * height); j++) {
+                                                                    if (std::isfinite(pixels[j])) {
+                                                                        minValue = std::min(minValue, pixels[j]);
+                                                                        maxValue = std::max(maxValue, pixels[j]);
+                                                                    }
+                                                                }
 
-                                                auto& hdu = fits.extension(i);
+                                                                if (std::isfinite(minValue) && std::isfinite(maxValue) && minValue != maxValue) {
+                                                                    cv::Mat image(static_cast<int>(height), static_cast<int>(width), CV_8UC1);
 
-                                                long dimensions = hdu.axes();
+                                                                    for (long y = 0; y < height; y++) {
+                                                                        for (long x = 0; x < width; x++) {
+                                                                            double value = pixels[static_cast<size_t>(y * width + x)];
+                                                                            unsigned char pixel = 0;
+                                                                            if (std::isfinite(value)) {
+                                                                                double normalized = (value - minValue) / (maxValue - minValue) * 255.0;
+                                                                                pixel = static_cast<unsigned char>(std::clamp(normalized, 0.0, 255.0));
+                                                                            }
+                                                                            image.at<unsigned char>(static_cast<int>(height - 1 - y), static_cast<int>(x)) = pixel;
+                                                                        }
+                                                                    }
 
-                                                std::cout << "Extension " << i
-                                                          << " dimensions: "
-                                                          << dimensions << std::endl;
-
-                                                if (dimensions < 2) {
-                                                    continue;
+                                                                    if (cv::imwrite("output.png", image)) {
+                                                                        std::cout << "PNG CONVERSION SUCCESSFUL!" << std::endl;
+                                                                        successFlag = true;
+                                                                        return;
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } catch (const std::exception& e) {
+                                                    std::cout << "Primary HDU read error: " << e.what() << std::endl;
                                                 }
-
-                                                long width = hdu.axis(0);
-                                                long height = hdu.axis(1);
-
-                                                if (width <= 0 || height <= 0) {
-                                                    continue;
-                                                }
-
-                                                std::cout << "Image dimensions: "
-                                                          << width << " x "
-                                                          << height << std::endl;
-
-                                                std::valarray<double> pixels;
 
                                                 try {
-                                                    hdu.read(pixels);
-                                                }
-                                                catch (const std::exception& e) {
+                                                    for (int i = 1; i <= static_cast<int>(fitsFile.extension().size()); i++) {
+                                                        CCfits::ExtHDU& ext = fitsFile.extension(i);
+                                                        long dimensions = ext.axes();
+                                                        if (dimensions < 2) continue;
 
-                                                    std::cout << "Skipping extension: "
-                                                              << e.what() << std::endl;
+                                                        long width = ext.axis(0);
+                                                        long height = ext.axis(1);
+                                                        if (width <= 0 || height <= 0) continue;
 
-                                                    continue;
-                                                }
+                                                        std::valarray<double> pixels;
+                                                        ext.read(pixels);
 
-                                                if (pixels.size() <
-                                                    static_cast<size_t>(width * height)) {
-                                                    continue;
-                                                }
+                                                        if (pixels.size() >= static_cast<size_t>(width * height)) {
+                                                            double minValue = std::numeric_limits<double>::max();
+                                                            double maxValue = std::numeric_limits<double>::lowest();
 
-                                                double minValue =
-                                                    std::numeric_limits<double>::max();
+                                                            for (size_t j = 0; j < static_cast<size_t>(width * height); j++) {
+                                                                if (std::isfinite(pixels[j])) {
+                                                                    minValue = std::min(minValue, pixels[j]);
+                                                                    maxValue = std::max(maxValue, pixels[j]);
+                                                                }
+                                                            }
 
-                                                double maxValue =
-                                                    std::numeric_limits<double>::lowest();
+                                                            if (std::isfinite(minValue) && std::isfinite(maxValue) && minValue != maxValue) {
+                                                                cv::Mat image(static_cast<int>(height), static_cast<int>(width), CV_8UC1);
 
-                                                for (size_t j = 0;
-                                                     j < static_cast<size_t>(width * height);
-                                                     j++) {
+                                                                for (long y = 0; y < height; y++) {
+                                                                    for (long x = 0; x < width; x++) {
+                                                                        double value = pixels[static_cast<size_t>(y * width + x)];
+                                                                        unsigned char pixel = 0;
+                                                                        if (std::isfinite(value)) {
+                                                                            double normalized = (value - minValue) / (maxValue - minValue) * 255.0;
+                                                                            pixel = static_cast<unsigned char>(std::clamp(normalized, 0.0, 255.0));
+                                                                        }
+                                                                        image.at<unsigned char>(static_cast<int>(height - 1 - y), static_cast<int>(x)) = pixel;
+                                                                    }
+                                                                }
 
-                                                    if (std::isfinite(pixels[j])) {
-                                                        minValue = std::min(minValue, pixels[j]);
-                                                        maxValue = std::max(maxValue, pixels[j]);
-                                                    }
-                                                }
-
-                                                if (!std::isfinite(minValue) ||
-                                                    !std::isfinite(maxValue) ||
-                                                    minValue == maxValue) {
-                                                    continue;
-                                                }
-
-                                                cv::Mat image(
-                                                    static_cast<int>(height),
-                                                    static_cast<int>(width),
-                                                    CV_8UC1
-                                                );
-
-                                                for (long y = 0; y < height; y++) {
-
-                                                    for (long x = 0; x < width; x++) {
-
-                                                        double value = pixels[
-                                                            static_cast<size_t>(y * width + x)
-                                                        ];
-
-                                                        unsigned char pixel = 0;
-
-                                                        if (std::isfinite(value)) {
-
-                                                            double normalized =
-                                                                (value - minValue) /
-                                                                (maxValue - minValue) * 255.0;
-
-                                                            pixel = static_cast<unsigned char>(
-                                                                std::clamp(normalized, 0.0, 255.0)
-                                                            );
+                                                                if (cv::imwrite("output.png", image)) {
+                                                                    std::cout << "PNG CONVERSION SUCCESSFUL (from extension " << i << ")!" << std::endl;
+                                                                    successFlag = true;
+                                                                    return;
+                                                                }
+                                                            }
                                                         }
-
-                                                        image.at<unsigned char>(
-                                                            static_cast<int>(y),
-                                                            static_cast<int>(x)
-                                                        ) = pixel;
                                                     }
+                                                } catch (const std::exception& e) {
+                                                    std::cout << "Extension read error: " << e.what() << std::endl;
                                                 }
+                                            };
 
-                                                if (cv::imwrite("output.png", image)) {
-
-                                                    std::cout << "PNG CONVERSION SUCCESSFUL!"
-                                                              << std::endl;
-
-                                                    imageFound = true;
-                                                    break;
-                                                }
-                                            }
-
-                                            if (!imageFound) {
-                                                std::cerr << "No convertible image extension found!"
-                                                          << std::endl;
-                                            }
+                                            processHDU(fits, pngGenerated);
 
                                         }
                                         catch (const std::exception& e) {
@@ -582,7 +563,22 @@ int main() {
 
                     std::cout << outputText << std::endl;
 
-                    res.set_content(outputText, "text/plain");
+                    if (pngGenerated) {
+
+                        std::cout << "PNG ready. Redirecting to image display..."
+                                  << std::endl;
+
+                        res.set_redirect("/", 303);
+
+                    }
+                    else {
+
+                        res.set_content(
+                            "FITS retrieved, but PNG generation failed. Check server output.",
+                            "text/plain"
+                        );
+
+                    }
 
                 }
                 else {
