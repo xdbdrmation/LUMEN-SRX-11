@@ -62,7 +62,7 @@ int main() {
                             color: #ffcccc;
                             text-align: center;
                             font-family: 'Archivo Black', sans-serif;
-                            font-size: 18px;
+                            font-size: 20px;
                             text-shadow: 1px 1px 4px rgba(0,0,0,0.7);
                         }
 
