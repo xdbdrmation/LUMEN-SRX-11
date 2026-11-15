@@ -17,7 +17,7 @@
 #include <cstring>
 #include "tinyxml2.h"
 
-// http://127.0.0.1:8081
+// http://127.0.0.1:8081 use this stuff bro not the 8080
 
 int main() {
 
@@ -157,7 +157,7 @@ int main() {
         std::ifstream file("output.png", std::ios::binary);
 
         if (!file) {
-            res.status = 204;
+            res.status = 204; //prolly 200 too idk
             return;
         }
 
@@ -177,7 +177,7 @@ int main() {
 
             std::string RA = req.get_param_value("RA");
             std::string DEC = req.get_param_value("DEC");
-
+// yeah this is the csv to request lol
             std::string reqcsv =
                 "/SIA?COLLECTION=spherex_dr1&POS=circle+" +
                 RA + "+" + DEC + "+0.02&MAXREC=1";
@@ -213,7 +213,7 @@ int main() {
 
                     std::string xml = irsa_res->body;
                     std::vector<std::string> accessUrls;
-
+// well here we go!, xml is used here too umm to get the acess_url which is then used to get FITS
                     tinyxml2::XMLDocument doc;
                     doc.Parse(xml.c_str());
 
