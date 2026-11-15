@@ -20,7 +20,7 @@ A C++ backend application that hosts a local HTTP server, fetches astronomical c
 
 * **Language:** C++ (C++17 or later recommended)
 * **Local Server & HTTP Client:** `cpp-httplib` — Handles both the local HTTP server hosting and outbound requests to IRSA.
-* **FITS File Processing:** `CCfits` (requires `cfitsio`) — Used for reading, writing, and manipulating FITS (Flexible Image Transport System) files.
+* **FITS File Processing:** `CCfits` — Used for reading, writing, and manipulating FITS (Flexible Image Transport System) files.
 * **XML Parsing:** `tinyxml2` — Used for lightweight parsing of XML metadata and service responses.
 
 ---
@@ -55,7 +55,7 @@ clang++ ServerV5.cpp -o ServerV5 -I/usr/include/opencv5 -lssl -lcrypto -lCCfits 
 1. Compile the binary using the command above.
 2. Run the executable:
    ```bash
-   ./server
+   ./ServerV5
    ```
 3. Access the local endpoints via `http://localhost:<PORT>` (check your source configuration for the exact port number).
 
