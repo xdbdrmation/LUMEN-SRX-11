@@ -35,7 +35,7 @@ int main() {
 
                     <style>
                         body {
-                            background-image: url('https://nasa.gov');
+                            background-image: url('https://images-assets.nasa.gov/image/art002e009567/art002e009567~large.jpg?w=400&h=300&fit=crop&crop=faces%2Cfocalpoint');
                             background-size: cover;
                             background-position: center;
                             background-attachment: fixed;
