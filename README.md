@@ -1,7 +1,8 @@
 
 # LUMEN-SRX-11
--This website provides a easy way to view FITS images from spherex, it uses C++ as its backend making it fast
--PLEASE RUN THE ServerV5 as it is the FUlly developed version
+- This website provides a easy way to view FITS images from spherex, it uses C++ as its backend making it fast
+- PLEASE RUN THE ServerV5 as it is the FUlly developed version
+- Also compile the ServerV5.cpp before testing it, the following command is given below
 # IMAGE - 1 | RA = 133.79513  RD = -7.245147 NAME = WISE 0855 (Please zoom in to see them as the radius was defined very high)
 <img width="2040" height="2040" alt="image (1)" src="https://github.com/user-attachments/assets/e8bff1f1-fa4f-4b48-8bb4-2fe9ef822308" />
 # IMAGE - 2 RA = 83.82 RD = -5.38 NAME = ORION NEBULAE (Please zoom in to see them as the radius was defined very high)
